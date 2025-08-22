@@ -20,6 +20,10 @@ interface RAToastContent {
   description?: string;
   status?: Status;
   time?: string;
+  progress?: {
+    percentage: number;
+    message?: string;
+  };
 }
 
 // Create a global ToastQueue.
@@ -103,6 +107,27 @@ export const Toaster = () => (
                 <Text slot="description" className="text-xs">
                   {toast.content.description}
                 </Text>
+              )}
+              {toast.content.progress && (
+                <div className="w-full">
+                  {toast.content.progress.message && (
+                    <div className="mb-1 text-xs text-[--hl]">
+                      {toast.content.progress.message}
+                    </div>
+                  )}
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span>Progress</span>
+                    <span>{toast.content.progress.percentage}%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-[--hl-sm]">
+                    <div
+                      className="h-full rounded-full bg-[#4000bf] transition-all duration-300 ease-out"
+                      style={{
+                        width: `${toast.content.progress.percentage}%`,
+                      }}
+                    />
+                  </div>
+                </div>
               )}
             </div>
           </div>

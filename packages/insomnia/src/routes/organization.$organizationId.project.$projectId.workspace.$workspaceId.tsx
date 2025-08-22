@@ -27,6 +27,7 @@ import type { Workspace } from '~/models/workspace';
 import type { WorkspaceMeta } from '~/models/workspace-meta';
 import { pushSnapshotOnInitialize } from '~/sync/vcs/initialize-backend-project';
 import { VCSInstance } from '~/sync/vcs/insomnia-sync';
+import { showToast } from '~/ui/components/toast-notification';
 import { invariant } from '~/utils/invariant';
 
 import type { Route } from './+types/organization.$organizationId.project.$projectId.workspace.$workspaceId';
@@ -266,7 +267,55 @@ export async function clientLoader({ params, request }: Route.ClientLoaderArgs) 
       const vcs = VCSInstance();
       await vcs.switchAndCreateBackendProjectIfNotExist(workspaceId, activeWorkspace.name);
       if (activeWorkspaceMeta.pushSnapshotOnInitialize) {
-        await pushSnapshotOnInitialize({ vcs, workspace: activeWorkspace, project: activeProject });
+        try {
+          showToast({
+            icon: 'cloud',
+            title: 'Starting workspace encryption',
+            description: 'Setting up secure project...'
+          }, { timeout: 8000 });
+
+          let lastKeyPercentage = -1;
+          let lastToastTime = 0;
+
+          await pushSnapshotOnInitialize({
+            vcs,
+            workspace: activeWorkspace,
+            project: activeProject,
+            onProgress: (progress) => {
+              const percentage = Math.floor((progress.current / progress.total) * 100);
+              const now = Date.now();
+              const timeSinceLastToast = now - lastToastTime;
+
+              // Show toast if: 10% progress change AND at least 2 seconds passed, OR completion
+              if ((percentage >= lastKeyPercentage + 10 && timeSinceLastToast >= 5000) ||
+                  progress.current === progress.total) {
+                lastKeyPercentage = percentage;
+                lastToastTime = now;
+
+                showToast({
+                  icon: 'key',
+                  title: 'Encrypting workspace keys',
+                  description: `${progress.current} of ${progress.total} keys encrypted`,
+                  progress: { percentage, message: `${percentage}% complete` }
+                }, { timeout: 8000 });
+              }
+            }
+          });
+
+          showToast({
+            icon: 'check-circle',
+            title: 'Workspace encryption complete',
+            status: 'success',
+            description: 'Your workspace is ready!'
+          }, { timeout: 8000 });
+        } catch (error) {
+          showToast({
+            icon: 'exclamation-triangle',
+            title: 'Encryption setup failed',
+            status: 'error',
+            description: error instanceof Error ? error.message : 'Unknown error'
+          }, { timeout: 6000 });
+        }
       }
     } catch (err) {
       console.warn('Failed to initialize VCS', err);

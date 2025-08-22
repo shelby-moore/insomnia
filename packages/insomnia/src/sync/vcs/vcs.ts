@@ -617,12 +617,12 @@ export class VCS {
     return delta;
   }
 
-  async _getOrCreateRemoteBackendProject({ teamId, teamProjectId }: { teamId: string; teamProjectId: string }) {
+  async _getOrCreateRemoteBackendProject({ teamId, teamProjectId }: { teamId: string; teamProjectId: string }, onProgress?: (progress: { current: number; total: number; message: string }) => void) {
     const localProject = await this._assertBackendProject();
     let remoteProject = await this._queryProject();
 
     if (!remoteProject) {
-      remoteProject = await this._createRemoteProject({ ...localProject, teamId, teamProjectId });
+      remoteProject = await this._createRemoteProject({ ...localProject, teamId, teamProjectId }, onProgress);
     }
 
     await this._storeBackendProject(remoteProject);
@@ -634,18 +634,19 @@ export class VCS {
     name,
     teamId,
     teamProjectId,
-  }: BackendProject & { teamId: string; teamProjectId: string }) {
+  }: BackendProject & { teamId: string; teamProjectId: string }, onProgress?: (progress: { current: number; total: number; message: string }) => void) {
     if (!teamId) {
       throw new Error('teamId should be defined');
     }
 
     const teamKeys = await this._queryTeamMemberKeys(teamId);
-    return this._queryCreateProject(rootDocumentId, name, teamId, teamProjectId, teamKeys.memberKeys);
+    const result = await this._queryCreateProject(rootDocumentId, name, teamId, teamProjectId, teamKeys.memberKeys, onProgress);
+    return result;
   }
 
   // TODO: may be we can create another push function for initial push, so that we can reduce some api calls
-  async push({ teamId, teamProjectId }: { teamId: string; teamProjectId: string }) {
-    await this._getOrCreateRemoteBackendProject({ teamId, teamProjectId });
+  async push({ teamId, teamProjectId }: { teamId: string; teamProjectId: string }, onProgress?: (progress: { current: number; total: number; message: string }) => void) {
+    await this._getOrCreateRemoteBackendProject({ teamId, teamProjectId }, onProgress);
     const branch = await this._getCurrentBranch();
     // Check branch history to make sure there are no conflicts
     let lastMatchingIndex = 0;
@@ -1196,6 +1197,7 @@ export class VCS {
       publicKey: string;
       autoLinked: boolean;
     }[],
+    onProgress?: (progress: { current: number; total: number; message: string }) => void,
   ) {
     // Generate symmetric key for ResourceGroup
     const symmetricKey = await crypt.generateAES256Key();
@@ -1208,7 +1210,18 @@ export class VCS {
     }
 
     // Encrypt the symmetric key with the public keys of all the team members, ourselves included
+    const totalKeys = teamPublicKeys.length;
+    let currentKey = 0;
+
     for (const { accountId, publicKey, autoLinked } of teamPublicKeys) {
+      currentKey++;
+
+      onProgress?.({
+        current: currentKey,
+        total: totalKeys,
+        message: `Encrypting keys (${currentKey}/${totalKeys})...`
+      });
+
       teamKeys.push({
         autoLinked,
         accountId,

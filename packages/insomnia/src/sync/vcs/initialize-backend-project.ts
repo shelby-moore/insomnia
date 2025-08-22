@@ -40,10 +40,12 @@ export const pushSnapshotOnInitialize = async ({
   vcs,
   workspace,
   project: { _id: projectId, remoteId: projectRemoteId, parentId },
+  onProgress,
 }: {
   vcs: VCS;
   workspace: Workspace;
   project: Project;
+  onProgress?: (progress: { current: number; total: number; message: string }) => void;
 }) => {
   const projectIsForWorkspace = projectId === workspace.parentId;
 
@@ -55,6 +57,6 @@ export const pushSnapshotOnInitialize = async ({
 
   if (projectIsForWorkspace && projectRemoteId && hasProject) {
     await models.workspaceMeta.updateByParentId(workspace._id, { pushSnapshotOnInitialize: false });
-    await vcs.push({ teamId: parentId, teamProjectId: projectRemoteId });
+    await vcs.push({ teamId: parentId, teamProjectId: projectRemoteId }, onProgress);
   }
 };
